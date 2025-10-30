@@ -49,6 +49,8 @@ const userSchema = new mongoose.Schema({
     expiry_date: Number,
   },
 
+  phoneNumber: { type: String }, 
+  
   // ✅ Correct Notion structure for your code
   notionToken: String,              // user's Notion integration token
   notionDatabaseId: String,         // the created database ID
@@ -58,6 +60,7 @@ const userSchema = new mongoose.Schema({
   prefs: {
     timezone: { type: String, default: 'UTC' },
   },
+   
 });
 
 export const User = mongoose.model('User', userSchema);

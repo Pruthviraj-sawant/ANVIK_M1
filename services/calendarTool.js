@@ -167,3 +167,36 @@ const event = {
   await calendar.events.insert({ calendarId: 'primary', resource: event });
   return '📅 Event added to your Google Calendar.';
 }
+
+export async function getCalendarEvents(telegramId, maxResults = 5) {
+  const user = await User.findOne({ telegramId });
+  if (!user?.google) return '⚠️ Google account not connected.';
+
+  oauth2Client.setCredentials(user.google);
+  const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+  // Get current date/time in ISO
+  const now = new Date().toISOString();
+
+  // Fetch upcoming events
+  const res = await calendar.events.list({
+    calendarId: 'primary',
+    timeMin: now,
+    maxResults,
+    singleEvents: true,
+    orderBy: 'startTime',
+  });
+
+  const events = res.data.items;
+  if (!events.length) return '📭 No upcoming events found.';
+
+  // Format event list nicely
+  let message = '📅 *Your Upcoming Events:*\n\n';
+  for (const e of events) {
+    const start = e.start.dateTime || e.start.date;
+    const end = e.end.dateTime || e.end.date;
+    message += `🕒 *${e.summary || 'Untitled Event'}*\n📆 ${start} → ${end}\n\n`;
+  }
+
+  return message;
+}
