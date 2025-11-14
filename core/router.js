@@ -374,6 +374,7 @@ import {
   getNotionAuthUrl,
 } from "../services/notionTool.js";
 
+import { getRecentEmails } from "../services/emailTools.js";
 
 import { setReminder } from "../services/reminderTool.js";
 import { User } from "../models/User.js";
@@ -466,7 +467,16 @@ Supported intents:
      - time: string
    - If message/time missing, ask politely in the reply.
 
-8. "general" → Any other chat, greeting, or question. 
+8. "get_emails" → User wants to check recent emails.
+   - Trigger phrases:
+     - "show my emails"
+     - "check emails"
+     - "get my mails"
+     - "latest emails"
+   - Expected output:
+     - {"intent": "get_emails", "details": {}, "reply": "Fetching your recent emails..."}
+
+9. "general" → Any other chat, greeting, or question. 
    - Extract:
      - reply: string
 
@@ -498,6 +508,9 @@ User: "delete task abc123"
 User: "remind me to call mom at 8pm"
 → {"intent":"set_reminder","details":{"message":"call mom","time":"8pm"},"reply":"Reminder set for 8 PM."}
 
+User: "get my mails"
+→ {"intent":"get_emails","details":{},"reply":"Fetching your recent emails..."}
+
 User: "hi"
 → {"intent":"general","details":{},"reply":"Hello! How can I assist you today?"}
 
@@ -515,8 +528,7 @@ You are a helpful, intelligent AI assistant that can chat naturally with users. 
 Always prioritize user intent and make the conversation feel smooth, natural, and helpful.
 
 When anyone says who made you or who is your creator, respond with:
-"I was created by a team of talented developers at Anvik — Pruthvi Sawant, Yash Ainapure, Sami Bhadgaonkar, Ayush Patil, and Diksha Sambarekar."
-`;
+"I was created by a team of talented developers at Anvik — Pruthvi Sawant, Yash Ainapure, Sami Bhadgaonkar, Ayush Patil, and Diksha Sambarekar."`;
 
 // // Initialize a simple main agent and orchestrator (lazy init)
 // ---------------- AGENT SETUP ----------------
@@ -591,6 +603,12 @@ if (lc.startsWith("send email")) {
   const subject = "Message from Anvik";
 
   return await sendUserEmail(telegramId, to, subject, body);
+}
+
+
+// FETCH RECENT EMAILS
+if (lc.startsWith("my emails")) {
+  return await getRecentEmails(telegramId, 5);
 }
 
   // ===================================================

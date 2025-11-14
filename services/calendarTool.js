@@ -122,6 +122,8 @@ export async function getGoogleAuthUrl(telegramId) {
     scope: [
       'https://www.googleapis.com/auth/calendar.events',
       'https://www.googleapis.com/auth/userinfo.email',
+      "https://www.googleapis.com/auth/gmail.readonly",   // 👈 REQUIRED
+  "https://www.googleapis.com/auth/gmail.modify"
     ],
     state: telegramId,
     response_type: 'code', // ✅ explicitly add this

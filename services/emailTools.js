@@ -1,6 +1,8 @@
 // FILE: services/emailTool.js
 import nodemailer from "nodemailer";
 import { User } from "../models/User.js";
+import { google } from "googleapis";
+
 console.log("SMTP_USER:", process.env.SMTP_USER);
 console.log("SMTP_PASS:", process.env.SMTP_PASS ? "LOADED" : "NOT LOADED");
 
@@ -92,4 +94,52 @@ export async function sendUserEmail(telegramId, to, subject, body) {
   });
 
   return `📤 Email sent to *${to}* successfully!`;
+}
+
+export async function getRecentEmails(telegramId, max = 10) {
+  const user = await User.findOne({ telegramId });
+  if (!user?.google?.access_token)
+    return "⚠️ Connect Google first using: connect google";
+
+  const oAuth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
+  );
+
+  oAuth2Client.setCredentials({
+    access_token: user.google.access_token,
+    refresh_token: user.google.refresh_token,
+  });
+
+  const gmail = google.gmail({ version: "v1", auth: oAuth2Client });
+
+  // Fetch message IDs
+  const res = await gmail.users.messages.list({
+    userId: "me",
+    maxResults: max,
+  });
+
+  if (!res.data.messages?.length) return "📭 No recent emails found.";
+
+  let emailList = "📥 *Your Recent Emails:*\n\n";
+
+  for (const msg of res.data.messages) {
+    const fullMsg = await gmail.users.messages.get({
+      userId: "me",
+      id: msg.id,
+      format: "metadata",
+      metadataHeaders: ["Subject", "From", "Date"],
+    });
+
+    const headers = fullMsg.data.payload.headers;
+
+    const subject = headers.find((h) => h.name === "Subject")?.value || "(No Subject)";
+    const from = headers.find((h) => h.name === "From")?.value || "(Unknown)";
+    const date = headers.find((h) => h.name === "Date")?.value || "";
+
+    emailList += `📧 *${subject}*\nFrom: ${from}\nDate: ${date}\n\n`;
+  }
+
+  return emailList;
 }
