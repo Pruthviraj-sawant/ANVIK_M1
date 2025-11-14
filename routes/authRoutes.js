@@ -3,6 +3,8 @@
 import express from 'express';
 import { getGoogleAuthUrl, handleGoogleCallback } from '../services/calendarTool.js';
 import { User } from '../models/User.js';
+import querystring from 'querystring';
+import axios from 'axios';
 const router = express.Router();
 
 router.get('/google', async (req, res) => {
@@ -163,12 +165,81 @@ router.get('/google/callback', async (req, res) => {
 
 
 
-// Optional: Notion placeholder
-router.get('/notion', async (req, res) => {
-  const state = req.query.state;
-  return res.send(
-    `To connect Notion, paste your integration token to your Telegram chat with: /notion_token <token> <database_id>. State: ${state}`
-  );
+/**
+ * STEP 1️⃣ Redirect user to Notion authorization page
+ */
+router.get("/notion", (req, res) => {
+  const telegramId = req.query.state || "unknown";
+  const params = querystring.stringify({
+    client_id: process.env.NOTION_CLIENT_ID,
+    response_type: "code",
+    owner: "user",
+    redirect_uri: process.env.NOTION_REDIRECT_URI,
+    state: telegramId,
+  });
+
+  const url = `https://api.notion.com/v1/oauth/authorize?${params}`;
+  res.redirect(url);
 });
 
+/**
+ * STEP 2️⃣ Handle OAuth Callback
+ */
+
+router.get('/notion/callback', async (req, res) => {
+  const { code, state } = req.query;
+  const telegramId = state?.startsWith("tg_") ? state.replace("tg_", "") : state; // Extract Telegram ID safely
+
+  try {
+    // Exchange authorization code for access token
+    const notionResponse = await axios.post(
+      'https://api.notion.com/v1/oauth/token',
+      {
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: process.env.NOTION_REDIRECT_URI,
+      },
+      {
+        auth: {
+          username: process.env.NOTION_CLIENT_ID,
+          password: process.env.NOTION_CLIENT_SECRET,
+        },
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+
+    const { access_token, workspace_id, workspace_name } = notionResponse.data;
+
+    // ✅ Step 1: Check if Telegram user exists
+    let user = await User.findOne({ telegramId });
+if (!user) user = await User.create({ telegramId });
+user.notionToken = access_token;
+user.notionWorkspaceId = workspace_id;
+user.notionWorkspaceName = workspace_name;
+await user.save();
+
+
+    // ✅ Step 4: Respond to the browser
+    res.send(`
+      <html><body style="text-align:center; font-family:sans-serif; margin-top:50px;">
+        <h2>✅ Notion Connected!</h2>
+        <p>Workspace: <b>${workspace_name}</b></p>
+        <a href="https://t.me/AnvikAssistant_Bot">Return to Telegram</a>
+      </body></html>
+    `);
+
+  } catch (err) {
+    console.error("❌ Notion OAuth error:", err.response?.data || err.message);
+    res.status(500).send(`
+      <html><body>
+        <h2>❌ Notion Connection Failed</h2>
+        <pre>${err.response?.data?.error_description || err.message}</pre>
+      </body></html>
+    `);
+  }
+});
+
+
+
 export default router;
+

@@ -7,23 +7,35 @@ dotenv.config();
 /**
  * Get Notion connect URL for manual connection
  */
-export async function getNotionConnectUrl(telegramId) {
-  return `${process.env.BASE_URL}/auth/notion?state=${telegramId}`;
+export function getNotionAuthUrl(telegramId) {
+  const params = new URLSearchParams({
+    client_id: process.env.NOTION_CLIENT_ID,
+    response_type: 'code',
+    owner: 'user',
+    redirect_uri: process.env.NOTION_REDIRECT_URI,
+    state: `tg_${telegramId}`,
+  });
+  return `https://api.notion.com/v1/oauth/authorize?${params}`;
 }
+
+
+
 
 /**
  * Create Notion client for user
  */
-async function getNotionClient(telegramId) {
+
+
+export async function getNotionClient(telegramId) {
   const user = await User.findOne({ telegramId: String(telegramId) });
-  if (!user || !user.notionToken)
-    throw new Error('⚠️ Notion not connected. Use /notion_token to connect your Notion account.');
-      if (!user)
-         throw new Error('User not found. Please connect Notion using /notion_token.');
-    if (!user.notionToken) t
-    throw new Error('Notion not connected. Use /notion_token to connect your Notion account.');
-  return { notion: new Client({ auth: user.notionToken }), user };
+  if (!user?.notionToken) throw new Error("⚠️ Notion not connected!");
+
+  const notion = new Client({ auth: user.notionToken });
+  return { notion, user };
 }
+
+
+
 
 /**
  * ✅ ADD TASK
@@ -31,9 +43,10 @@ async function getNotionClient(telegramId) {
 export async function createNotionTask(telegramId, title, description, due_date) {
   try {
     const { notion, user } = await getNotionClient(telegramId);
+
     let { notionDatabaseId, notionParentPageId } = user;
 
-    // Create workspace page if missing
+    // Create parent page if missing
     if (!notionParentPageId) {
       const parentPage = await notion.pages.create({
         parent: { type: 'workspace', workspace: true },
@@ -56,32 +69,48 @@ export async function createNotionTask(telegramId, title, description, due_date)
     }
 
     // Create database if missing
-    if (!notionDatabaseId) {
-      const db = await notion.databases.create({
-        parent: { page_id: notionParentPageId },
-        title: [{ type: 'text', text: { content: 'Anvik Tasks' } }],
-        properties: {
-          Title: { title: {} },
-          Description: { rich_text: {} },
-          DueDate: { date: {} },
-          Status: {
-            select: {
-              options: [
-                { name: 'To-Do', color: 'blue' },
-                { name: 'In Progress', color: 'yellow' },
-                { name: 'Done', color: 'green' },
-              ],
-            },
-          },
+// Create workspace page if missing
+if (!notionParentPageId) {
+  let parentPage;
+
+  try {
+    // 🧠 Try normal workspace creation first
+    parentPage = await notion.pages.create({
+      parent: { workspace: true },
+      properties: {
+        title: {
+          title: [{ text: { content: "Anvik Workspace" } }],
         },
-      });
+      },
+      icon: { type: "emoji", emoji: "🧠" },
+    });
+  } catch (err) {
+    console.warn("⚠️ Workspace-level creation failed, using fallback page...");
 
-      notionDatabaseId = db.id;
-      user.notionDatabaseId = notionDatabaseId;
-      await user.save();
-    }
+    // 🧩 Fallback: create under a default known parent page (your admin page)
+    parentPage = await notion.pages.create({
+      parent: { type: "page_id", page_id: process.env.NOTION_PARENT_PAGE_ID },
+      properties: {
+        title: {
+          title: [{ text: { content: "Anvik Workspace" } }],
+        },
+      },
+      icon: { type: "emoji", emoji: "🧠" },
+    });
+  }
 
-    // Add the new task
+  // ✅ Save the parent page ID in the user document
+  notionParentPageId = parentPage.id;
+  user.notionParentPageId = notionParentPageId;
+  await user.save();
+}
+
+
+
+
+
+
+    // Create task
     await notion.pages.create({
       parent: { database_id: notionDatabaseId },
       properties: {
@@ -92,9 +121,12 @@ export async function createNotionTask(telegramId, title, description, due_date)
       },
     });
 
-    return '📝 Task added successfully to Notion.';
+    return '✅ Task added successfully to Notion.';
   } catch (error) {
     console.error('❌ Notion API error:', error.body || error.message || error);
+    if (error.message?.includes('Notion not connected')) {
+      return '⚠️ Please connect your Notion workspace using `connect notion`.';
+    }
     return '❌ Failed to add task to Notion.';
   }
 }
