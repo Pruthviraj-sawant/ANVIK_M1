@@ -1,0 +1,290 @@
+ANVIK M1 is a multi-agent personal assistant framework built in Node.js.
+
+It is designed to act like a real assistant (like JARVIS, Google Assistant, or GPT-based agents) and is modular, meaning you can add any tool, service, or agent very easily.
+
+🧱 1. Folder Structure Overview
+ANVIK_M1-main/
+│
+├── agents/
+├── core/
+├── services/
+├── db/
+├── utils/
+├── models/
+├── routes/
+├── index.js
+├── package.json
+
+
+Here is the meaning of every folder:
+
+🧠 2. agents/ — The Brain (Multi-Agent System)
+
+This folder contains:
+
+✔ agent.js
+
+Defines a SINGLE agent class.
+Each agent has:
+
+name
+
+description
+
+tools it can use
+
+decision-making logic
+
+communication with LLM
+
+Basically the “worker agent”.
+
+✔ agentsOrchestrator.js
+
+This is the boss agent / manager.
+
+It decides:
+
+Which agent should do what
+
+Which tool to call
+
+How to coordinate multiple agents
+
+How to pass results between them
+
+This is what makes M1 more advanced than BASE_AGENT.
+
+✔ index.js
+
+Exports all agents + orchestrator.
+
+🧩 3. core/router.js — Main Routing Engine
+
+This creates the main API routes and connects them to the orchestrator.
+
+Flow:
+
+Frontend → router → agentsOrchestrator → tools → LLM → response
+
+
+It’s the pipeline controller.
+
+🔧 4. services/ — Tools (Actual Capabilities)
+
+This folder contains all tools the agent can use.
+
+Here are the tools inside:
+🗓 calendarTool.js
+
+Helps the agent:
+
+read calendar
+
+add events
+
+schedule reminders
+
+📧 emailTools.js
+
+Basic email operations.
+
+📫 email/findcontacts.js
+
+Finds contact names from mailbox.
+
+📨 email/sendemail.js
+
+Sends emails.
+
+📥 email/reademail.js
+
+Reads inbox.
+
+🧠 aiService.js
+
+The brain.
+Talks to the LLM:
+
+sends user prompt
+
+gets AI response
+
+guides agent & orchestrator
+
+📝 notionTool.js
+
+Connects to Notion workspace:
+
+create notes
+
+read pages
+
+update documents
+
+⏰ reminderTool.js
+
+Set reminders
+Trigger alerts
+Store user reminders
+
+🔌 5. db/connect.js — Database Connection
+
+Connects to MongoDB using Mongoose.
+
+👤 6. models/User.js — User Schema
+
+Includes:
+
+name
+
+email
+
+tokens
+
+preferences
+
+settings
+
+saved reminders
+
+saved tasks
+
+🔐 7. routes/authRoutes.js — Authentication API
+
+Handles:
+
+signup
+
+login
+
+refresh token
+
+logout
+
+🛠 8. utils/llm.js — LLM Interface
+
+This file is responsible for:
+
+calling OpenAI or any LLM
+
+passing the prompt
+
+binding tools
+
+structured outputs
+
+function calling support
+
+This is the core AI bridge.
+
+🟢 9. index.js — Entry Point
+
+Starts the server.
+
+Flow:
+
+Loads env → connects DB → loads router → starts API
+
+🔥 Now, The Most Important Part:
+🚀 How ANVIK M1 Actually Works (ENGINE FLOW)
+
+Let’s break down what happens inside when you send:
+“Send an email to John saying I will be late.”
+
+Step-by-Step Execution
+🟩 Step 1 → Request arrives at API
+
+The frontend hits:
+
+POST /ai
+
+
+The message goes to router.js.
+
+🟦 Step 2 → Router → Orchestrator
+
+agentsOrchestrator.js analyzes:
+
+user message → “send an email…"
+
+matches required agent → “Email Agent”
+
+matches required tool → “sendemail.js”
+
+🟧 Step 3 → Orchestrator → LLM
+
+LLM receives a structured prompt like:
+
+User wants to send an email:
+{
+  "task": "send email",
+  "to": "John",
+  "message": "I will be late"
+}
+
+
+LLM may respond with tool instructions.
+
+🟥 Step 4 → Tool Activation
+
+sendemail.js triggers:
+
+connect to user mailbox
+
+find contact
+
+send email with text
+
+🟨 Step 5 → Tool returns output
+
+Example:
+
+Email sent successfully to John.
+
+
+This goes back to the orchestrator.
+
+🟪 Step 6 → Orchestrator → LLM Response
+
+The final user-friendly response is generated.
+
+🟩 Step 7 → Back to User
+
+You receive:
+
+“Email successfully sent to John.”
+
+🎯 What Makes ANVIK M1 Powerful?
+✔ Multi-agent system
+✔ Tool-based architecture
+✔ LLM-driven orchestration
+✔ Easy to extend
+✔ Clear separation of:
+
+AI logic
+
+Tools
+
+Database
+
+User auth
+
+Agents
+
+✔ Perfect foundation for:
+
+Personal digital assistant
+
+AI productivity tools
+
+Jarvis-style system
+
+College / office assistant
+
+Knowledge manager
+
+🏆 In Simple Words:
+
+ANVIK M1 = LLM + Tools + Multi-Agent System + Orchestrator + DB + Auth
+All working together to behave like a smart personal assistant.
