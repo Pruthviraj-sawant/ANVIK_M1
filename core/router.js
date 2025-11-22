@@ -31,18 +31,25 @@ You are Anvik, an intelligent and helpful assistant for Telegram.
 Your goal is to understand user messages, extract intents, and route them to the correct tool. 
 
 Guidelines:
-1. Detect the user's intent even if they write informally, incompletely, or make mistakes.
-2. If information is missing (like event date/time, title, or task title), politely ask for it in the "reply".
+1. Be friendly, conversational, and helpful in your responses.
+2. When creating events, be smart about interpreting dates and times:
+   - If only a date is given, assume 10:00 AM as default start time
+   - If no end time is specified, assume 1 hour duration
+   - For all-day events, use the date format YYYY-MM-DD without time
+   - Support natural language dates like "tomorrow at 3pm" or "next Monday"
+3. For event creation, try to extract as much information as possible from the initial message.
 
 Supported intents:
 
 1. "create_event" → User wants to schedule an event (Google Calendar). 
    - Extract:
-     - title: string
-     - start: string (date/time, natural language allowed)
-     - end: string (optional; if missing, suggest 1-hour default)
-     - description: string (optional)
-   - If title/start/end missing, ask politely in the reply.
+     - title: string (required, e.g., "Team Meeting")
+     - start: string (date/time in natural language, e.g., "tomorrow at 2pm" or "2025-12-25T14:00:00")
+     - end: string (optional; if missing, calculate based on start + 1 hour)
+     - description: string (optional, additional details about the event)
+     - isAllDay: boolean (set to true for all-day events)
+   - If title or start is missing, ask for it in a friendly way
+   - When asking for missing info, be conversational and suggest examples
 
 2. "get_events" → User wants to view their upcoming calendar events or meetings.
    - Trigger phrases:
@@ -265,12 +272,45 @@ if (lc.startsWith("my emails")) {
   // ===================================================
   let intentData;
   try {
-    const raw = await orchestrator.invoke(text);
-    const match = raw.match(/\{[\s\S]*\}$/);
+    // Pre-process the text to handle common event creation patterns
+    let processedText = text.trim();
+    
+    // Common patterns for event creation
+    if (processedText.toLowerCase().includes('birthday') || 
+        processedText.toLowerCase().includes('event') ||
+        processedText.toLowerCase().includes('meeting') ||
+        processedText.toLowerCase().includes('remind me') ||
+        processedText.toLowerCase().includes('schedule')) {
+      
+      // Add context if the message looks like an event but is missing details
+      if (!processedText.match(/\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}/) && // No date
+          !processedText.match(/\b(?:tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week|next month)\b/i)) {
+        processedText = `Create an event: ${processedText}`;
+      }
+    }
 
-    intentData = match
-      ? JSON.parse(match[0])
-      : { intent: "general", details: {}, reply: raw };
+    const raw = await orchestrator.invoke(processedText);
+    let match = raw.match(/\{[\s\S]*\}$/);
+    
+    // If no JSON found, try to handle it as a simple event creation
+    if (!match) {
+      if (processedText.toLowerCase().includes('birthday') || 
+          processedText.toLowerCase().includes('event')) {
+        intentData = {
+          intent: "create_event",
+          details: {
+            title: processedText,
+            start: new Date().toISOString(),
+            description: "Created by Anvik Assistant"
+          },
+          reply: `I'll help you create an event for: ${processedText}`
+        };
+      } else {
+        intentData = { intent: "general", details: {}, reply: raw };
+      }
+    } else {
+      intentData = JSON.parse(match[0]);
+    }
 
   } catch (err) {
     console.error("Intent parse error:", err);

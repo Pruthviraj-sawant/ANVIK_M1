@@ -75,30 +75,64 @@ export async function handleGoogleCallback(code, stateTelegramId) {
 }
 
 export async function createCalendarEvent(details, telegramId) {
-  const user = await User.findOne({ telegramId });
-  if (!user?.google) return '⚠️ Google account not connected.';
+  try {
+    const user = await User.findOne({ telegramId });
+    if (!user?.google) return '⚠️ Please connect your Google account first using: /connect google';
 
-  
-  oauth2Client.setCredentials(user.google);
-  const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+    oauth2Client.setCredentials(user.google);
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
+    const userTimeZone = moment.tz.guess();
+    const startTime = toISO(details.start, userTimeZone);
+    
+    // If no end time is provided, default to 1 hour after start
+    let endTime = details.end ? toISO(details.end, userTimeZone) : null;
+    if (!endTime && startTime) {
+      const startMoment = moment(startTime);
+      endTime = startMoment.add(1, 'hour').format();
+    }
 
-const userTimeZone = moment.tz.guess(); // guesses user's timezone
-const event = {
-  summary: details.title,
-  description: details.description,
-  start: {
-    dateTime: toISO(details.start, userTimeZone),
-    timeZone: userTimeZone
-  },
-  end: {
-    dateTime: toISO(details.end, userTimeZone),
-    timeZone: userTimeZone
+    // If it's an all-day event (like a birthday), use date instead of dateTime
+    const isAllDay = details.isAllDay || 
+                   (details.title && details.title.toLowerCase().includes('birthday'));
+
+    const event = {
+      summary: details.title || 'New Event',
+      description: details.description || 'Created by Anvik Assistant',
+      start: {
+        [isAllDay ? 'date' : 'dateTime']: isAllDay ? moment(startTime).format('YYYY-MM-DD') : startTime,
+        timeZone: userTimeZone
+      },
+      end: {
+        [isAllDay ? 'date' : 'dateTime']: isAllDay ? 
+          moment(startTime).add(1, 'day').format('YYYY-MM-DD') : 
+          endTime,
+        timeZone: userTimeZone
+      }
+    };
+
+    const response = await calendar.events.insert({
+      calendarId: 'primary',
+      resource: event
+    });
+
+    // Format a nice response with the event details
+    const eventLink = response.data.htmlLink;
+    const eventSummary = response.data.summary;
+    const eventStart = response.data.start.dateTime || response.data.start.date;
+    
+    return `✅ Event created successfully!\n\n` +
+           `📅 *${eventSummary}*\n` +
+           `⏰ ${eventStart}\n` +
+           `🔗 [View in Calendar](${eventLink})`;
+
+  } catch (error) {
+    console.error('Error creating calendar event:', error);
+    if (error.response?.data?.error) {
+      return `❌ Error: ${error.response.data.error.message || 'Failed to create event'}`;
+    }
+    return '❌ An error occurred while creating the event. Please try again.';
   }
-};
-
-  await calendar.events.insert({ calendarId: 'primary', resource: event });
-  return '📅 Event added to your Google Calendar.';
 }
 
 export async function getCalendarEvents(telegramId, maxResults = 5) {
